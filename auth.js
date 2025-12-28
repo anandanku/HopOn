@@ -1,62 +1,89 @@
+import express from "express";
 import passport from "passport";
-import express, { Router } from "express";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import {User} from "./userschema.js";
+import { User } from "./userschema.js";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+
 dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const router=express.Router();
-passport.serializeUser((user,done)=>{
-    done(null,user.id);
+
+const router = express.Router();
+
+/* ===============================
+   Passport session handling
+================================ */
+passport.serializeUser((user, done) => {
+  done(null, user._id);
 });
+
 passport.deserializeUser(async (id, done) => {
   try {
-    const user = await User.findById(id); // fetch user from DB
-    done(null, user); // pass full user object
+    const user = await User.findById(id);
+    done(null, user);
   } catch (err) {
-    done(err, null);
+    done(err);
   }
 });
-passport.use(new GoogleStrategy({
-    clientID:process.env.GOOGLE_CLIENT_ID,
-    clientSecret:process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL:"https://hoponed.vercel.app/auth/google/callback"
-   },
-   async (accessToken, refreshToken, profile, done) => {
-    let findUser;
-    try {
-        findUser=await User.findOne({GoogleId:profile.id});
-        console.log("finding the user");
-    } catch (error) {
-        console.log("user not found");
-        return done(error,null);
-    }
-    try {
-        if(!findUser){
-            const newuser=new User({
-                GoogleId:profile.id,
-                displayname:profile.displayName
-        });
-        const newsaveduser=await newuser.save();
-        console.log("saved a user");
-        return done(null,newsaveduser);
+
+/* ===============================
+   Google OAuth Strategy
+================================ */
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "https://hoponed.vercel.app/auth/google/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ GoogleId: profile.id });
+
+        if (!user) {
+          user = await User.create({
+            GoogleId: profile.id,
+            displayname: profile.displayName || "Google User",
+          });
         }
-        return done(null,findUser);
-    } catch (error) {
-        return done(error,null);
+
+        return done(null, user);
+      } catch (error) {
+        console.error("Google OAuth error:", error);
+        return done(error);
+      }
     }
-  }
-));
+  )
+);
+
+/* ===============================
+   Routes
+================================ */
+
 router.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "loginpage.html"));
 });
-router.get("/auth/google",passport.authenticate("google",{scope:["profile"]}));
-router.get("/auth/google/callback",passport.authenticate("google",{failureRedirect:"/"}),(req,res)=>{
-       res.redirect("/home");
-});
+
+router.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+);
+
+router.get(
+  "/auth/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: "/",
+  }),
+  (req, res) => {
+    res.redirect("/home");
+  }
+);
 
 export default router;
+
+
+
 
