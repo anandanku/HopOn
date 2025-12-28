@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Register Bus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #ff8c00;
+  padding: 40px;
+}
+
+.container {
+  background: #fff;
+  max-width: 480px;
+  margin: auto;
+  padding: 25px;
+  border-radius: 12px;
+}
+
+h2 {
+  text-align: center;
+  color: #ff8c00;
+}
+
+label {
+  font-weight: bold;
+  margin-top: 15px;
+  display: block;
+}
+
+input {
+  width: 100%;
+  padding: 8px;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.route {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  position: relative;
+}
+
+.route input {
+  flex: 1;
+}
+
+.remove-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: none;
+  background: #ff3b3b;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.remove-btn:hover {
+  background: #e40000;
+}
+
+.suggestions {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  right: 42px;
+  background: #fff;
+  border: 1px solid #ccc;
+  max-height: 160px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.suggestions div {
+  padding: 6px;
+  cursor: pointer;
+}
+
+.suggestions div:hover {
+  background: #eee;
+}
+
+button {
+  margin-top: 15px;
+  padding: 10px;
+  width: 100%;
+  background: #ff8c00;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.error {
+  color: red;
+  text-align: center;
+  margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>Register Bus</h2>
+
+  <form id="busForm">
+    <label>Bus Number</label>
+    <input type="text" id="busnumber" required>
+
+    <label>Route Stops</label>
+    <div id="routes"></div>
+
+    <button type="button" id="addStop">+ Add Stop</button>
+    <button type="submit">Register Bus</button>
+
+    <div class="error" id="error"></div>
+  </form>
+</div>
+
+<script>
+let MAPBOX_TOKEN = "";
+const selectedPlaces = new Map();
+
+const routesDiv = document.getElementById("routes");
+const addStopBtn = document.getElementById("addStop");
+const form = document.getElementById("busForm");
+const errorDiv = document.getElementById("error");
+
+/* ================= FETCH TOKEN ================= */
+async function loadToken() {
+  const res = await fetch("/config");
+  const data = await res.json();
+  MAPBOX_TOKEN = data.MAPBOX_TOKEN;
+}
+loadToken();
+
+/* ================= AUTOCOMPLETE ================= */
+async function searchPlaces(query) {
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?autocomplete=true&limit=5&country=IN&access_token=${MAPBOX_TOKEN}`
+  );
+  const data = await res.json();
+  return data.features || [];
+}
+
+function attachAutocomplete(input) {
+  let suggestionBox;
+
+  input.addEventListener("input", async () => {
+    const q = input.value.trim();
+    if (q.length < 3) return;
+
+    suggestionBox?.remove();
+
+    suggestionBox = document.createElement("div");
+    suggestionBox.className = "suggestions";
+
+    const places = await searchPlaces(q);
+
+    places.forEach(place => {
+      const div = document.createElement("div");
+      div.textContent = place.place_name;
+
+      div.onclick = () => {
+        input.value = place.place_name;
+        selectedPlaces.set(input, place);
+        suggestionBox.remove();
+      };
+
+      suggestionBox.appendChild(div);
+    });
+
+    input.parentNode.appendChild(suggestionBox);
+  });
+}
+
+/* ================= ADD / REMOVE STOP ================= */
+function createStop() {
+  const wrapper = document.createElement("div");
+  wrapper.className = "route";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Search place";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "remove-btn";
+  removeBtn.innerHTML = "✕";
+
+  removeBtn.onclick = () => {
+    selectedPlaces.delete(input);
+    wrapper.remove();
+  };
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(removeBtn);
+  routesDiv.appendChild(wrapper);
+
+  attachAutocomplete(input);
+}
+
+/* create first stop */
+createStop();
+
+addStopBtn.addEventListener("click", createStop);
+
+/* ================= SUBMIT ================= */
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  errorDiv.textContent = "";
+
+  const route = [];
+
+  document.querySelectorAll(".route input").forEach(input => {
+    const place = selectedPlaces.get(input);
+    if (!place) {
+      errorDiv.textContent = "Please select all stops from suggestions.";
+      return;
+    }
+
+    route.push({
+      name: place.place_name,
+      latitude: place.center[1],
+      longitude: place.center[0]
+    });
+  });
+
+  if (route.length < 2) {
+    errorDiv.textContent = "At least 2 stops are required.";
+    return;
+  }
+
+  const payload = {
+    busnumber: document.getElementById("busnumber").value.trim(),
+    route
+  };
+
+  try {
+    const res = await fetch("/home/bus/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+
+    if (result.success) {
+      alert("Bus registered successfully!");
+      location.reload();
+    } else {
+      errorDiv.textContent = result.error || "Registration failed";
+    }
+  } catch {
+    errorDiv.textContent = "Server error";
+  }
+});
+</script>
+
+</body>
+</html>

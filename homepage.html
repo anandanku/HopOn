@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HopOn</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
+#map{position:absolute;inset:0}
+
+/* SEARCH */
+.search-container{
+  position:fixed;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:460px;
+  z-index:2000;
+}
+.search-box,button{
+  width:100%;
+  height:52px;
+  margin-bottom:10px;
+  border-radius:12px;
+  border:2px solid #ff6b35;
+  padding:0 16px;
+  font-size:15px;
+}
+button{
+  background:#ff6b35;
+  color:white;
+  font-weight:600;
+  cursor:pointer;
+}
+
+/* AUTOSUGGEST */
+.suggestions{
+  background:white;
+  border:2px solid #ff6b35;
+  border-top:none;
+  display:none;
+  max-height:200px;
+  overflow:auto;
+}
+.suggestions div{
+  padding:10px;
+  cursor:pointer;
+}
+.suggestions div:hover{background:#ffe5d9}
+
+/* MENU */
+.menu-btn{
+  position:fixed;
+  top:20px;
+  left:20px;
+  width:48px;
+  height:48px;
+  background:#ff6b35;
+  color:white;
+  font-size:22px;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  z-index:3000;
+}
+
+/* SIDEBAR */
+.sidebar{
+  position:fixed;
+  top:0;
+  left:-260px;
+  width:240px;
+  height:100%;
+  background:#111;
+  padding:20px;
+  transition:.3s ease;
+  z-index:3100;
+}
+.sidebar.active{left:0}
+
+/* OVERLAY */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.6);
+  display:none;
+  z-index:3050;
+}
+.overlay.active{display:block}
+
+/* TOGGLE */
+.toggle{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  color:white;
+  margin-top:20px;
+}
+.switch{position:relative;width:50px;height:26px}
+.switch input{display:none}
+.slider{
+  position:absolute;inset:0;
+  background:#777;border-radius:26px;
+}
+.slider:before{
+  content:"";
+  position:absolute;
+  width:20px;height:20px;
+  left:3px;top:3px;
+  background:white;border-radius:50%;
+  transition:.3s;
+}
+input:checked + .slider{background:#ff6b35}
+input:checked + .slider:before{transform:translateX(24px)}
+
+/* BUS MARKER */
+.bus-marker{
+  width:46px;height:46px;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+}
+
+/* ROUTE POPUP */
+.route-popup{
+  position:absolute;
+  bottom:56px;
+  left:-120px;
+  background:#000;
+  padding:14px;
+  border-radius:12px;
+  min-width:260px;
+  color:white;
+  display:none;
+}
+
+/* SPEED */
+.speed-circle{
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  border:3px solid #ff6b35;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  margin:10px auto;
+}
+
+/* ROUTE LIST */
+.route-list{
+  position:relative;
+  display:grid;
+  grid-template-columns:20px 1fr;
+  row-gap:12px;
+}
+.route-line{
+  position:absolute;
+  left:9px;
+  top:0;
+  bottom:0;
+  width:2px;
+  background:white;
+}
+.route-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  margin-top:4px;
+  justify-self:center;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="menu-btn" id="menuBtn">☰</div>
+
+<div class="search-container">
+  <input id="src" class="search-box" placeholder="Source">
+  <div id="srcSug" class="suggestions"></div>
+
+  <input id="dst" class="search-box" placeholder="Destination">
+  <div id="dstSug" class="suggestions"></div>
+
+  <button id="getBuses">Get Buses</button>
+</div>
+
+<div class="sidebar" id="sidebar">
+  <h3 style="color:#ff6b35">Menu</h3>
+
+  <div class="toggle">
+    <span>On Route</span>
+    <label class="switch">
+      <input type="checkbox" id="onRoute">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <a href="/home/bus/register"
+     style="display:block;margin-top:20px;background:#ff6b35;padding:12px;
+     color:white;text-align:center;border-radius:10px;text-decoration:none">
+    Register Bus
+  </a>
+</div>
+
+<div class="overlay" id="overlay"></div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+<script>
+let map;
+let liveMarker = null;
+let routeCoords = [];
+let speedCircle = null;
+
+let source = {};
+let dest = {};
+
+/* ================= LOAD TOKEN + MAP ================= */
+async function initMap() {
+  const res = await fetch("/config");
+  const cfg = await res.json();
+
+  mapboxgl.accessToken = cfg.MAPBOX_TOKEN;
+
+  map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/dark-v11",
+    center: [86.07, 26.34],
+    zoom: 6
+  });
+}
+initMap();
+
+/* MENU */
+menuBtn.onclick = () => {
+  sidebar.classList.add("active");
+  overlay.classList.add("active");
+};
+overlay.onclick = () => {
+  sidebar.classList.remove("active");
+  overlay.classList.remove("active");
+};
+
+/* AUTOSUGGEST */
+async function geo(q){
+  const r = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=IN&limit=5&access_token=${mapboxgl.accessToken}`
+  );
+  return (await r.json()).features;
+}
+
+function bind(input, box, obj){
+  input.addEventListener("input", async () => {
+    if(input.value.length < 3){
+      box.style.display = "none";
+      return;
+    }
+    const results = await geo(input.value);
+    box.innerHTML = "";
+
+    results.forEach(p => {
+      const div = document.createElement("div");
+      div.textContent = p.place_name;
+      div.onclick = () => {
+        input.value = p.place_name;
+        obj.lat = p.center[1];
+        obj.lng = p.center[0];
+        box.style.display = "none";
+      };
+      box.appendChild(div);
+    });
+
+    box.style.display = "block";
+  });
+}
+
+bind(src, srcSug, source);
+bind(dst, dstSug, dest);
+
+/* GET BUSES */
+getBuses.onclick = async () => {
+  if (!source.lat || !dest.lat) {
+    alert("Please select source and destination from suggestions.");
+    return;
+  }
+
+  if (map.getSource("route")) {
+    map.removeLayer("route");
+    map.removeSource("route");
+  }
+
+  const res = await fetch("/livebuses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, destination: dest })
+  });
+
+  const data = await res.json();
+
+  if (!data.routes || !data.routes.length) {
+    alert("No buses found for this route");
+    return;
+  }
+
+  const bus = data.routes[0];
+
+  const waypoints = bus.subRoute.coordinates.map(c => c.join(",")).join(";");
+
+  const dir = await fetch(
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+  );
+
+  const geojson = (await dir.json()).routes[0].geometry;
+  routeCoords = geojson.coordinates;
+
+  map.addSource("route", {
+    type: "geojson",
+    data: { type: "Feature", geometry: geojson }
+  });
+
+  map.addLayer({
+    id: "route",
+    type: "line",
+    source: "route",
+    paint: { "line-width": 6, "line-color": "#ff6b35" }
+  });
+
+  const el = document.createElement("div");
+  el.className = "bus-marker";
+  el.innerHTML = `
+    <svg viewBox="0 0 64 64">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ff9f1c"/>
+          <stop offset="100%" stop-color="#ff6b35"/>
+        </linearGradient>
+      </defs>
+      <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g)"/>
+      <rect x="10" y="12" width="44" height="12" fill="#222"/>
+      <circle cx="18" cy="48" r="6" fill="#111"/>
+      <circle cx="46" cy="48" r="6" fill="#111"/>
+    </svg>
+  `;
+
+  const popup = document.createElement("div");
+  popup.className = "route-popup";
+
+  speedCircle = document.createElement("div");
+  speedCircle.className = "speed-circle";
+  speedCircle.textContent = "0 km/h";
+
+  const list = document.createElement("div");
+  list.className = "route-list";
+  list.innerHTML = '<div class="route-line"></div>';
+
+  bus.fullRoute.stops.forEach(s => {
+    list.innerHTML += `
+      <div class="route-dot" style="background:#ff6b35"></div>
+      <div>${s}</div>
+    `;
+  });
+
+  popup.append(speedCircle, list);
+  el.appendChild(popup);
+
+  el.onclick = e => {
+    e.stopPropagation();
+    popup.style.display = "block";
+  };
+  document.body.onclick = () => popup.style.display = "none";
+
+  liveMarker = new mapboxgl.Marker({ element: el })
+    .setLngLat(routeCoords[0])
+    .addTo(map);
+
+  map.fitBounds(routeCoords, { padding: 80 });
+};
+
+/* LIVE UPDATE */
+setInterval(async () => {
+  if (!liveMarker) return;
+
+  const r = await fetch("/livebuses");
+  const b = (await r.json())[0];
+  if (!b) return;
+
+  liveMarker.setLngLat([b.lng, b.lat]);
+
+  if (b.lastlat !== null) {
+    const d = Math.sqrt(
+      (b.lat - b.lastlat) ** 2 +
+      (b.lng - b.lastlng) ** 2
+    );
+    speedCircle.textContent = Math.round(d * 3600 / 10) + " km/h";
+  }
+}, 10000);
+
+/* TOGGLE */
+onRoute.onchange = async e => {
+  const r = await fetch("/livebuses", {
+    method: e.target.checked ? "PUT" : "DELETE"
+  });
+
+  if (!r.ok) {
+    alert("Toggle failed");
+    e.target.checked = !e.target.checked;
+  }
+};
+</script>
+</body>
+</html>

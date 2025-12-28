@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HopOn - Login</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #ff8800, #ffb347);
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .bus {
+      position: relative;
+      width: 350px;
+      height: 180px;
+      background: #ff6600;
+      border-radius: 20px;
+      box-shadow: 0 15px 25px rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transform: perspective(600px) rotateX(5deg) rotateY(0deg);
+    }
+
+    /* Windows */
+    .window {
+      position: absolute;
+      top: 30px;
+      left: 40px;
+      width: 270px;
+      height: 60px;
+      background: #cce7ff;
+      border-radius: 10px;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+    }
+
+    /* Wheels */
+    .wheel {
+      position: absolute;
+      bottom: -25px;
+      width: 50px;
+      height: 50px;
+      background: #333;
+      border-radius: 50%;
+      box-shadow: inset -5px -5px 10px rgba(0,0,0,0.3);
+    }
+
+    .wheel.left {
+      left: 40px;
+    }
+
+    .wheel.right {
+      right: 40px;
+    }
+
+    /* Google Button on Bus Body */
+    .google-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      font-weight: 500;
+      text-decoration: none;
+      position: absolute;
+      bottom: 40px; /* slightly up */
+    }
+
+    .google-btn:hover {
+      background-color: #357ae8;
+    }
+
+    .google-logo {
+      vertical-align: middle;
+      margin-right: 8px;
+      width: 20px;
+      height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="bus">
+    <div class="window"></div>
+    <a href="/auth/google" class="google-btn">
+      <img src="https://www.svgrepo.com/show/355037/google.svg" class="google-logo" alt="Google" />
+      Login with Google
+    </a>
+    <div class="wheel left"></div>
+    <div class="wheel right"></div>
+  </div>
+</body>
+</html>
