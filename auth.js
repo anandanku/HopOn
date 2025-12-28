@@ -23,7 +23,7 @@ passport.deserializeUser(async (id, done) => {
 passport.use(new GoogleStrategy({
     clientID:process.env.GOOGLE_CLIENT_ID,
     clientSecret:process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL:"http://localhost:3000/auth/google/callback"
+    callbackURL:"https://hoponed-git-main-anandankus-projects.vercel.app/auth/google/callback"
    },
    async (accessToken, refreshToken, profile, done) => {
     let findUser;
@@ -57,4 +57,5 @@ router.get("/auth/google",passport.authenticate("google",{scope:["profile"]}));
 router.get("/auth/google/callback",passport.authenticate("google",{failureRedirect:"/"}),(req,res)=>{
        res.redirect("/home");
 });
+
 export default router;
