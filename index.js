@@ -24,7 +24,7 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect("mongodb://localhost:27017/HopOn");
+mongoose.connect(process.env.connect);
 app.use("/", authrouter);
 app.get("/config", (req, res) => {
   res.json({
@@ -34,5 +34,6 @@ app.get("/config", (req, res) => {
 
 app.use("/home", homerouter);
 app.use("/livebuses", livebusrouter);
+
 
 
