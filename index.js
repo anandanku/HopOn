@@ -35,4 +35,4 @@ app.get("/config", (req, res) => {
 app.use("/home", homerouter);
 app.use("/livebuses", livebusrouter);
 
-app.listen(3000, () => console.log("Server running on 3000"));
+
