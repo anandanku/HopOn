@@ -12,21 +12,11 @@
 html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
 #map{position:absolute;inset:0}
 
-/* ===== TOP BAR (MENU + SEARCH) ===== */
-.top-bar{
+/* ===== MENU BUTTON (FIXED TOP-LEFT) ===== */
+.menu-btn{
   position:fixed;
   top:20px;
-  left:50%;
-  transform:translateX(-50%);
-  display:flex;
-  gap:12px;
-  width:calc(100% - 32px);
-  max-width:520px;
-  z-index:3000;
-}
-
-/* MENU */
-.menu-btn{
+  left:20px;
   width:48px;
   height:48px;
   background:#ff6b35;
@@ -37,13 +27,20 @@ html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  flex-shrink:0;
+  z-index:3000;
 }
 
-/* SEARCH */
+/* ===== SEARCH ===== */
 .search-container{
-  flex:1;
+  position:fixed;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:calc(100% - 32px);
+  max-width:460px;
+  z-index:2000;
 }
+
 .search-box,button{
   width:100%;
   height:52px;
@@ -181,8 +178,9 @@ input:checked + .slider:before{transform:translateX(24px)}
   justify-self:center;
 }
 
+/* MOBILE */
 @media(max-width:768px){
-  .top-bar{top:14px}
+  .search-container{top:70px}
   .route-popup{left:-90px;min-width:220px}
 }
 </style>
@@ -192,20 +190,21 @@ input:checked + .slider:before{transform:translateX(24px)}
 
 <div id="map"></div>
 
-<div class="top-bar">
-  <div class="menu-btn" id="menuBtn">☰</div>
+<!-- MENU BUTTON -->
+<div class="menu-btn" id="menuBtn">☰</div>
 
-  <div class="search-container">
-    <input id="src" class="search-box" placeholder="Source">
-    <div id="srcSug" class="suggestions"></div>
+<!-- SEARCH -->
+<div class="search-container">
+  <input id="src" class="search-box" placeholder="Source">
+  <div id="srcSug" class="suggestions"></div>
 
-    <input id="dst" class="search-box" placeholder="Destination">
-    <div id="dstSug" class="suggestions"></div>
+  <input id="dst" class="search-box" placeholder="Destination">
+  <div id="dstSug" class="suggestions"></div>
 
-    <button id="getBuses">Get Buses</button>
-  </div>
+  <button id="getBuses">Get Buses</button>
 </div>
 
+<!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
   <h3 style="color:#ff6b35">Menu</h3>
 
