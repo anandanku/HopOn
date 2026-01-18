@@ -12,7 +12,7 @@
 html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
 #map{position:absolute;inset:0}
 
-/* MENU (TOP RIGHT) */
+/* ===== MENU BUTTON (TOP RIGHT) ===== */
 .menu-btn{
   position:fixed;
   top:20px;
@@ -30,7 +30,7 @@ html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
   z-index:4000;
 }
 
-/* SEARCH (UPPER MIDDLE) */
+/* ===== SEARCH (UPPER CENTER) ===== */
 .search-container{
   position:fixed;
   top:20px;
@@ -38,7 +38,7 @@ html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
   transform:translateX(-50%);
   width:calc(100% - 120px);
   max-width:460px;
-  z-index:2000;
+  z-index:3000;
 }
 .search-box,button{
   width:100%;
@@ -66,8 +66,36 @@ button{
 .suggestions div{padding:14px;cursor:pointer}
 .suggestions div:hover{background:#ffe5d9}
 
+/* SIDEBAR */
+.sidebar{
+  position:fixed;
+  top:0;
+  right:-260px;
+  width:240px;
+  height:100%;
+  background:#111;
+  padding:20px;
+  transition:.3s ease;
+  z-index:5000;
+}
+.sidebar.active{right:0}
+
+/* OVERLAY */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.6);
+  display:none;
+  z-index:4500;
+}
+.overlay.active{display:block}
+
 /* BUS MARKER */
-.bus-marker{width:46px;height:46px;transform:translate(-50%,-50%)}
+.bus-marker{
+  width:46px;height:46px;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+}
 
 /* POPUP */
 .route-popup{
@@ -82,7 +110,8 @@ button{
   display:none;
 }
 .speed-circle{
-  width:54px;height:54px;border-radius:50%;
+  width:54px;height:54px;
+  border-radius:50%;
   border:3px solid #ff6b35;
   display:flex;align-items:center;justify-content:center;
   font-weight:700;margin:10px auto;
@@ -104,10 +133,13 @@ button{
 </head>
 
 <body>
+
 <div id="map"></div>
 
-<div class="menu-btn">☰</div>
+<!-- MENU -->
+<div class="menu-btn" id="menuBtn">☰</div>
 
+<!-- SEARCH -->
 <div class="search-container">
   <input id="src" class="search-box" placeholder="Source">
   <div id="srcSug" class="suggestions"></div>
@@ -118,12 +150,22 @@ button{
   <button id="getBuses">Get Buses</button>
 </div>
 
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <h3 style="color:#ff6b35">Menu</h3>
+  <p style="color:white">Sidebar works ✔</p>
+</div>
+
+<div class="overlay" id="overlay"></div>
+
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
 <script>
 let map;
-let busesUI = [];   // stores { marker, routeCoords, sourceId, speedCircle }
+let busesUI = [];
+let source={}, dest={};
 
+/* MAP INIT */
 async function initMap(){
   const res = await fetch("/config");
   const cfg = await res.json();
@@ -137,6 +179,16 @@ async function initMap(){
   });
 }
 initMap();
+
+/* MENU HANDLERS */
+menuBtn.onclick = () => {
+  sidebar.classList.add("active");
+  overlay.classList.add("active");
+};
+overlay.onclick = () => {
+  sidebar.classList.remove("active");
+  overlay.classList.remove("active");
+};
 
 /* AUTOSUGGEST */
 async function geo(q){
@@ -162,23 +214,12 @@ function bind(input, box, obj){
     box.style.display="block";
   });
 }
-const source={}, dest={};
 bind(src,srcSug,source);
 bind(dst,dstSug,dest);
 
-/* FIND CLOSEST POINT ON ROUTE */
-function closestIndex(coords, lat, lng){
-  let min=Infinity, idx=0;
-  coords.forEach((c,i)=>{
-    const d=(c[1]-lat)**2+(c[0]-lng)**2;
-    if(d<min){min=d;idx=i;}
-  });
-  return idx;
-}
-
 /* GET BUSES */
 getBuses.onclick = async ()=>{
-  if(!source.lat || !dest.lat) return alert("Select from suggestions");
+  if(!source.lat||!dest.lat) return alert("Select from suggestions");
 
   busesUI.forEach(b=>{
     if(map.getLayer(b.layerId)){
@@ -196,34 +237,41 @@ getBuses.onclick = async ()=>{
   });
   const data = await res.json();
 
-  data.routes.forEach(async (bus, i)=>{
+  data.routes.forEach(async (bus,i)=>{
     const waypoints = bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
     const dir = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`);
     const geojson = (await dir.json()).routes[0].geometry;
 
-    const sourceId = "route"+i;
-    const layerId = "route-layer"+i;
+    const sourceId="route"+i;
+    const layerId="route-layer"+i;
 
-    map.addSource(sourceId,{
-      type:"geojson",
-      data:{type:"Feature",geometry:geojson}
-    });
+    map.addSource(sourceId,{type:"geojson",data:{type:"Feature",geometry:geojson}});
     map.addLayer({
       id:layerId,
       type:"line",
       source:sourceId,
-      paint:{
-        "line-width":6,
-        "line-color":["#ff6b35","#ff9f1c","#ff4040"][i]
-      }
+      paint:{"line-width":6,"line-color":["#ff6b35","#ff9f1c","#ff4040"][i]}
     });
 
     const el=document.createElement("div");
     el.className="bus-marker";
-    el.innerHTML=`<svg viewBox="0 0 64 64"><rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="#ff6b35"/></svg>`;
+    el.innerHTML=`
+      <svg viewBox="0 0 64 64">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff9f1c"/>
+            <stop offset="100%" stop-color="#ff6b35"/>
+          </linearGradient>
+        </defs>
+        <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g)"/>
+        <rect x="10" y="12" width="44" height="12" fill="#222"/>
+        <circle cx="18" cy="48" r="6" fill="#111"/>
+        <circle cx="46" cy="48" r="6" fill="#111"/>
+      </svg>`;
 
     const popup=document.createElement("div");
     popup.className="route-popup";
+
     const speed=document.createElement("div");
     speed.className="speed-circle";
     speed.textContent="0 km/h";
@@ -233,8 +281,10 @@ getBuses.onclick = async ()=>{
     bus.fullRoute.stops.forEach(s=>{
       list.innerHTML+=`<div class="route-dot"></div><div>${s}</div>`;
     });
+
     popup.append(speed,list);
     el.appendChild(popup);
+
     el.onclick=e=>{e.stopPropagation();popup.style.display="block"};
     document.body.onclick=()=>popup.style.display="none";
 
@@ -242,13 +292,7 @@ getBuses.onclick = async ()=>{
       .setLngLat(geojson.coordinates[0])
       .addTo(map);
 
-    busesUI.push({
-      marker,
-      routeCoords: geojson.coordinates,
-      sourceId,
-      layerId,
-      speedCircle: speed
-    });
+    busesUI.push({marker,sourceId,layerId,routeCoords:geojson.coordinates,speed});
   });
 };
 
@@ -266,18 +310,19 @@ setInterval(async ()=>{
 
     if(bus.lastlat!=null){
       const d=Math.sqrt((bus.lat-bus.lastlat)**2+(bus.lng-bus.lastlng)**2);
-      b.speedCircle.textContent=Math.round(d*360)+" km/h";
+      b.speed.textContent=Math.round(d*360)+" km/h";
     }
 
-    const idx=closestIndex(b.routeCoords,bus.lat,bus.lng);
-    const remaining=b.routeCoords.slice(idx);
-
-    map.getSource(b.sourceId).setData({
-      type:"Feature",
-      geometry:{type:"LineString",coordinates:remaining}
-    });
+    const idx=b.routeCoords.findIndex(c=>Math.abs(c[1]-bus.lat)<0.0005 && Math.abs(c[0]-bus.lng)<0.0005);
+    if(idx>0){
+      map.getSource(b.sourceId).setData({
+        type:"Feature",
+        geometry:{type:"LineString",coordinates:b.routeCoords.slice(idx)}
+      });
+    }
   });
 },10000);
 </script>
+
 </body>
 </html>
