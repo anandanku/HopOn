@@ -12,11 +12,11 @@
 html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
 #map{position:absolute;inset:0}
 
-/* ===== MENU BUTTON (FIXED TOP-LEFT) ===== */
+/* ===== MENU BUTTON (ALWAYS TOP-RIGHT) ===== */
 .menu-btn{
   position:fixed;
   top:20px;
-  left:20px;
+  right:20px;
   width:48px;
   height:48px;
   background:#ff6b35;
@@ -27,13 +27,13 @@ html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
   align-items:center;
   justify-content:center;
   cursor:pointer;
-  z-index:3000;
+  z-index:4000;
 }
 
-/* ===== SEARCH ===== */
+/* ===== SEARCH (NEVER OVERLAPS MENU) ===== */
 .search-container{
   position:fixed;
-  top:20px;
+  top:90px;                 /* ← prevents overlap */
   left:50%;
   transform:translateX(-50%);
   width:calc(100% - 32px);
@@ -178,9 +178,10 @@ input:checked + .slider:before{transform:translateX(24px)}
   justify-self:center;
 }
 
-/* MOBILE */
+/* MOBILE SAFE SPACING */
 @media(max-width:768px){
-  .search-container{top:70px}
+  .menu-btn{top:14px;right:14px}
+  .search-container{top:84px}
   .route-popup{left:-90px;min-width:220px}
 }
 </style>
@@ -190,7 +191,7 @@ input:checked + .slider:before{transform:translateX(24px)}
 
 <div id="map"></div>
 
-<!-- MENU BUTTON -->
+<!-- MENU -->
 <div class="menu-btn" id="menuBtn">☰</div>
 
 <!-- SEARCH -->
