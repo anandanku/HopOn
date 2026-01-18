@@ -12,7 +12,7 @@
 html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
 #map{position:absolute;inset:0}
 
-/* ===== MENU BUTTON (TOP LEFT – FIXED) ===== */
+/* MENU BUTTON */
 .menu-btn{
   position:fixed;
   top:20px;
@@ -30,7 +30,7 @@ html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
   z-index:5000;
 }
 
-/* ===== SEARCH (TOP CENTER) ===== */
+/* SEARCH */
 .search-container{
   position:fixed;
   top:20px;
@@ -67,7 +67,7 @@ button{
 .suggestions div{padding:14px;cursor:pointer}
 .suggestions div:hover{background:#ffe5d9}
 
-/* ===== SIDEBAR (LEFT – FIXED) ===== */
+/* SIDEBAR */
 .sidebar{
   position:fixed;
   top:0;
@@ -162,10 +162,8 @@ input:checked + .slider:before{transform:translateX(24px)}
 
 <div id="map"></div>
 
-<!-- MENU BUTTON -->
 <div class="menu-btn" id="menuBtn">☰</div>
 
-<!-- SEARCH -->
 <div class="search-container">
   <input id="src" class="search-box" placeholder="Source">
   <div id="srcSug" class="suggestions"></div>
@@ -176,7 +174,6 @@ input:checked + .slider:before{transform:translateX(24px)}
   <button id="getBuses">Get Buses</button>
 </div>
 
-<!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
   <h3 style="color:#ff6b35">Menu</h3>
 
@@ -201,17 +198,16 @@ input:checked + .slider:before{transform:translateX(24px)}
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
 <script>
-let map;
-let busesUI=[];
-let source={},dest={};
+let map, liveMarker=null, speedCircle=null;
+let source={}, dest={};
 
 /* MAP INIT */
 async function initMap(){
-  const res=await fetch("/config");
-  const cfg=await res.json();
-  mapboxgl.accessToken=cfg.MAPBOX_TOKEN;
+  const res = await fetch("/config");
+  const cfg = await res.json();
+  mapboxgl.accessToken = cfg.MAPBOX_TOKEN;
 
-  map=new mapboxgl.Map({
+  map = new mapboxgl.Map({
     container:"map",
     style:"mapbox://styles/mapbox/dark-v11",
     center:[86.07,26.34],
@@ -221,24 +217,13 @@ async function initMap(){
 initMap();
 
 /* MENU */
-menuBtn.onclick=()=>{
-  sidebar.classList.add("active");
-  overlay.classList.add("active");
-};
-overlay.onclick=()=>{
-  sidebar.classList.remove("active");
-  overlay.classList.remove("active");
-};
+menuBtn.onclick=()=>{sidebar.classList.add("active");overlay.classList.add("active")};
+overlay.onclick=()=>{sidebar.classList.remove("active");overlay.classList.remove("active")};
 
 /* ON ROUTE TOGGLE */
 onRoute.onchange=async e=>{
-  const r=await fetch("/livebuses",{
-    method:e.target.checked?"PUT":"DELETE"
-  });
-  if(!r.ok){
-    alert("Toggle failed");
-    e.target.checked=!e.target.checked;
-  }
+  const r=await fetch("/livebuses",{method:e.target.checked?"PUT":"DELETE"});
+  if(!r.ok){alert("Toggle failed");e.target.checked=!e.target.checked;}
 };
 
 /* AUTOSUGGEST */
@@ -267,6 +252,93 @@ function bind(input,box,obj){
 }
 bind(src,srcSug,source);
 bind(dst,dstSug,dest);
+
+/* GET BUSES */
+getBuses.onclick = async ()=>{
+  if(!source.lat||!dest.lat) return alert("Select from suggestions");
+
+  if(map.getSource("route")){
+    map.removeLayer("route");
+    map.removeSource("route");
+  }
+
+  const res = await fetch("/livebuses",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ source, destination:dest })
+  });
+
+  const data = await res.json();
+  if(!data.routes || !data.routes.length){
+    alert("No buses found");
+    return;
+  }
+
+  const bus = data.routes[0];
+
+  const waypoints = bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
+  const dir = await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`);
+  const geojson = (await dir.json()).routes[0].geometry;
+
+  map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
+  map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
+
+  const el=document.createElement("div");
+  el.className="bus-marker";
+  el.innerHTML=`
+    <svg viewBox="0 0 64 64">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#ff9f1c"/>
+          <stop offset="100%" stop-color="#ff6b35"/>
+        </linearGradient>
+      </defs>
+      <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g)"/>
+      <rect x="10" y="12" width="44" height="12" fill="#222"/>
+      <circle cx="18" cy="48" r="6" fill="#111"/>
+      <circle cx="46" cy="48" r="6" fill="#111"/>
+    </svg>`;
+
+  const popup=document.createElement("div");
+  popup.className="route-popup";
+
+  speedCircle=document.createElement("div");
+  speedCircle.className="speed-circle";
+  speedCircle.textContent="0 km/h";
+
+  const list=document.createElement("div");
+  list.className="route-list";
+  bus.fullRoute.stops.forEach(s=>{
+    list.innerHTML+=`<div class="route-dot"></div><div>${s}</div>`;
+  });
+
+  popup.append(speedCircle,list);
+  el.appendChild(popup);
+
+  el.onclick=e=>{e.stopPropagation();popup.style.display="block"};
+  document.body.onclick=()=>popup.style.display="none";
+
+  liveMarker=new mapboxgl.Marker({element:el})
+    .setLngLat(geojson.coordinates[0])
+    .addTo(map);
+
+  map.fitBounds(geojson.coordinates,{padding:80});
+};
+
+/* LIVE UPDATE */
+setInterval(async ()=>{
+  if(!liveMarker) return;
+  const r=await fetch("/livebuses");
+  const b=(await r.json())[0];
+  if(!b) return;
+
+  liveMarker.setLngLat([b.lng,b.lat]);
+
+  if(b.lastlat!=null){
+    const d=Math.sqrt((b.lat-b.lastlat)**2+(b.lng-b.lastlng)**2);
+    speedCircle.textContent=Math.round(d*360)+" km/h";
+  }
+},10000);
 </script>
 
 </body>
