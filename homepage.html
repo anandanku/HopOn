@@ -12,15 +12,37 @@
 html,body{margin:0;height:100%;font-family:Poppins,sans-serif}
 #map{position:absolute;inset:0}
 
-/* SEARCH */
-.search-container{
+/* ===== TOP BAR (MENU + SEARCH) ===== */
+.top-bar{
   position:fixed;
   top:20px;
   left:50%;
   transform:translateX(-50%);
+  display:flex;
+  gap:12px;
   width:calc(100% - 32px);
-  max-width:460px;
-  z-index:2000;
+  max-width:520px;
+  z-index:3000;
+}
+
+/* MENU */
+.menu-btn{
+  width:48px;
+  height:48px;
+  background:#ff6b35;
+  color:white;
+  font-size:22px;
+  border-radius:10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  flex-shrink:0;
+}
+
+/* SEARCH */
+.search-container{
+  flex:1;
 }
 .search-box,button{
   width:100%;
@@ -52,24 +74,6 @@ button{
   cursor:pointer;
 }
 .suggestions div:hover{background:#ffe5d9}
-
-/* MENU */
-.menu-btn{
-  position:fixed;
-  top:20px;
-  left:20px;
-  width:48px;
-  height:48px;
-  background:#ff6b35;
-  color:white;
-  font-size:22px;
-  border-radius:10px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  z-index:3000;
-}
 
 /* SIDEBAR */
 .sidebar{
@@ -177,9 +181,8 @@ input:checked + .slider:before{transform:translateX(24px)}
   justify-self:center;
 }
 
-/* MOBILE */
-@media (max-width:768px){
-  .search-container{top:70px}
+@media(max-width:768px){
+  .top-bar{top:14px}
   .route-popup{left:-90px;min-width:220px}
 }
 </style>
@@ -189,16 +192,18 @@ input:checked + .slider:before{transform:translateX(24px)}
 
 <div id="map"></div>
 
-<div class="menu-btn" id="menuBtn">☰</div>
+<div class="top-bar">
+  <div class="menu-btn" id="menuBtn">☰</div>
 
-<div class="search-container">
-  <input id="src" class="search-box" placeholder="Source">
-  <div id="srcSug" class="suggestions"></div>
+  <div class="search-container">
+    <input id="src" class="search-box" placeholder="Source">
+    <div id="srcSug" class="suggestions"></div>
 
-  <input id="dst" class="search-box" placeholder="Destination">
-  <div id="dstSug" class="suggestions"></div>
+    <input id="dst" class="search-box" placeholder="Destination">
+    <div id="dstSug" class="suggestions"></div>
 
-  <button id="getBuses">Get Buses</button>
+    <button id="getBuses">Get Buses</button>
+  </div>
 </div>
 
 <div class="sidebar" id="sidebar">
@@ -224,19 +229,21 @@ input:checked + .slider:before{transform:translateX(24px)}
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
 <script>
-let map, liveMarker=null, routeCoords=[], speedCircle=null;
+let map, liveMarker=null, speedCircle=null;
 let source={}, dest={};
 
 async function initMap(){
   const res=await fetch("/config");
   const cfg=await res.json();
   mapboxgl.accessToken=cfg.MAPBOX_TOKEN;
+
   map=new mapboxgl.Map({
     container:"map",
     style:"mapbox://styles/mapbox/dark-v11",
     center:[86.07,26.34],
     zoom:6
   });
+
   window.addEventListener("resize",()=>map.resize());
 }
 initMap();
@@ -283,11 +290,9 @@ getBuses.onclick=async()=>{
 
   const res=await fetch("/livebuses",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source,destination:dest})});
   const data=await res.json();
-  if(!data.routes?.length){alert("No buses");return}
-
   const bus=data.routes[0];
-  const waypoints=bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
 
+  const waypoints=bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
   const dir=await fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`);
   const geojson=(await dir.json()).routes[0].geometry;
 
@@ -296,11 +301,62 @@ getBuses.onclick=async()=>{
 
   const el=document.createElement("div");
   el.className="bus-marker";
-  el.innerHTML=`<svg viewBox="0 0 64 64">...</svg>`;
+  el.innerHTML=`
+  <svg viewBox="0 0 64 64">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ff9f1c"/>
+        <stop offset="100%" stop-color="#ff6b35"/>
+      </linearGradient>
+    </defs>
+    <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g)"/>
+    <rect x="10" y="12" width="44" height="12" fill="#222"/>
+    <circle cx="18" cy="48" r="6" fill="#111"/>
+    <circle cx="46" cy="48" r="6" fill="#111"/>
+  </svg>`;
 
-  liveMarker=new mapboxgl.Marker({element:el}).setLngLat(geojson.coordinates[0]).addTo(map);
+  const popup=document.createElement("div");
+  popup.className="route-popup";
+
+  speedCircle=document.createElement("div");
+  speedCircle.className="speed-circle";
+  speedCircle.textContent="0 km/h";
+
+  const list=document.createElement("div");
+  list.className="route-list";
+  list.innerHTML='<div class="route-line"></div>';
+
+  bus.fullRoute.stops.forEach(s=>{
+    list.innerHTML+=`
+      <div class="route-dot" style="background:#ff6b35"></div>
+      <div>${s}</div>`;
+  });
+
+  popup.append(speedCircle,list);
+  el.appendChild(popup);
+
+  el.onclick=e=>{e.stopPropagation();popup.style.display="block"};
+  document.body.onclick=()=>popup.style.display="none";
+
+  liveMarker=new mapboxgl.Marker({element:el})
+    .setLngLat(geojson.coordinates[0])
+    .addTo(map);
+
   map.fitBounds(geojson.coordinates,{padding:80});
 };
+
+/* LIVE UPDATE */
+setInterval(async()=>{
+  if(!liveMarker)return;
+  const r=await fetch("/livebuses");
+  const b=(await r.json())[0];
+  if(!b)return;
+  liveMarker.setLngLat([b.lng,b.lat]);
+  if(b.lastlat!=null){
+    const d=Math.sqrt((b.lat-b.lastlat)**2+(b.lng-b.lastlng)**2);
+    speedCircle.textContent=Math.round(d*360)+" km/h";
+  }
+},10000);
 </script>
 
 </body>
