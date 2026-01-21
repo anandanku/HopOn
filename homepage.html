@@ -118,34 +118,35 @@ input:checked + .slider:before{transform:translateX(24px)}
 
 /* BUS MARKER */
 .bus-marker{
-  width:46px;height:46px;
-  transform:translate(-50%,-50%);
+  width:46px;
+  height:46px;
   cursor:pointer;
 }
 
-/* PIN STOP MARKER */
+/* STOP PIN — FIXED */
 .stop-marker{
   position:relative;
-  width:34px;
-  height:34px;
+  width:36px;
+  height:36px;
   background:#ffd500;
   border-radius:50%;
   display:flex;
   align-items:center;
   justify-content:center;
   box-shadow:0 6px 10px rgba(0,0,0,.35);
+  transform-origin: bottom center;
 }
 .stop-marker:after{
   content:"";
   position:absolute;
-  bottom:-14px;
+  bottom:-18px;
   left:50%;
   transform:translateX(-50%);
   width:0;
   height:0;
-  border-left:10px solid transparent;
-  border-right:10px solid transparent;
-  border-top:16px solid #ffd500;
+  border-left:12px solid transparent;
+  border-right:12px solid transparent;
+  border-top:18px solid #ffd500;
 }
 .stop-marker .inner{
   width:22px;
@@ -344,7 +345,7 @@ getBuses.onclick = async ()=>{
   map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
   map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
 
-  /* STOP MARKERS — FIXED ANCHOR */
+  /* STOP MARKERS — LOCKED */
   bus.subRoute.coordinates.forEach(c=>{
     const el=document.createElement("div");
     el.className="stop-marker";
