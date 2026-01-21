@@ -129,7 +129,7 @@ input:checked + .slider:before{transform:translateX(24px)}
   width:34px;
   height:34px;
   background:#ffd500;
-  border-radius:50% 50% 50% 50%;
+  border-radius:50%;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -344,7 +344,7 @@ getBuses.onclick = async ()=>{
   map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
   map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
 
-  /* STOP MARKERS */
+  /* STOP MARKERS — FIXED ANCHOR */
   bus.subRoute.coordinates.forEach(c=>{
     const el=document.createElement("div");
     el.className="stop-marker";
@@ -357,7 +357,10 @@ getBuses.onclick = async ()=>{
           <circle cx="46" cy="48" r="6"/>
         </svg>
       </div>`;
-    const m=new mapboxgl.Marker({element:el}).setLngLat(c).addTo(map);
+    const m=new mapboxgl.Marker({
+      element:el,
+      anchor:"bottom"
+    }).setLngLat(c).addTo(map);
     stationMarkers.push(m);
   });
 
