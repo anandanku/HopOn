@@ -206,9 +206,15 @@ input:checked + .slider:before{transform:translateX(24px)}
 <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
 
 <script>
-let map, liveMarker=null, speedCircle=null;
-let stationMarkers=[];
+let map;
+let liveMarkers = [];
+let speedCircles = [];
+let stationMarkers = [];
+let routeLayers = [];
+
 let source={}, dest={};
+
+const ROUTE_COLORS = ["#ff6b35", "#ff8c42", "#ff9f1c"];
 
 /* MAP INIT */
 async function initMap(){
@@ -271,22 +277,28 @@ function bind(input,box,obj){
 bind(src,srcSug,source);
 bind(dst,dstSug,dest);
 
+/* CLEAR OLD MAP DATA */
+function clearMap(){
+  routeLayers.forEach(id=>{
+    if(map.getLayer(id)) map.removeLayer(id);
+    if(map.getSource(id)) map.removeSource(id);
+  });
+  routeLayers=[];
+
+  liveMarkers.forEach(m=>m.remove());
+  liveMarkers=[];
+
+  stationMarkers.forEach(m=>m.remove());
+  stationMarkers=[];
+
+  speedCircles=[];
+}
+
 /* GET BUSES */
 getBuses.onclick = async ()=>{
   if(!source.lat||!dest.lat) return alert("Select from suggestions");
 
-  if(map.getSource("route")){
-    map.removeLayer("route");
-    map.removeSource("route");
-  }
-
-  if(liveMarker){
-    liveMarker.remove();
-    liveMarker=null;
-  }
-
-  stationMarkers.forEach(m=>m.remove());
-  stationMarkers=[];
+  clearMap();
 
   const res = await fetch("/livebuses",{
     method:"POST",
@@ -301,90 +313,110 @@ getBuses.onclick = async ()=>{
     return;
   }
 
-  const bus = data.routes[0];
-  const waypoints = bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
+  data.routes.forEach((bus, idx)=>{
+    const waypoints = bus.subRoute.coordinates.map(c=>c.join(",")).join(";");
 
-  const dir = await fetch(
-    `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
-  );
-  const geojson = (await dir.json()).routes[0].geometry;
+    fetch(
+      `https://api.mapbox.com/directions/v5/mapbox/driving/${waypoints}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+    ).then(r=>r.json()).then(dirData=>{
+      const geojson = dirData.routes[0].geometry;
 
-  map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
-  map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
+      const routeId = "route-"+idx;
+      map.addSource(routeId,{type:"geojson",data:{type:"Feature",geometry:geojson}});
+      map.addLayer({
+        id:routeId,
+        type:"line",
+        source:routeId,
+        paint:{
+          "line-width":6,
+          "line-color": ROUTE_COLORS[idx % ROUTE_COLORS.length]
+        }
+      });
+      routeLayers.push(routeId);
 
-  /* STOP MARKERS — YELLOW CIRCLE, ORANGE BUS, SKIP SOURCE */
-  bus.subRoute.coordinates.slice(1).forEach(c=>{
-    const el=document.createElement("div");
-    el.className="stop-marker";
-    el.innerHTML=`
-      <svg viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="30" fill="#ffd500"/>
-        <rect x="12" y="20" rx="6" ry="6" width="40" height="22" fill="#ff6b35"/>
-        <rect x="16" y="24" width="32" height="10" fill="#222"/>
-        <circle cx="22" cy="44" r="5" fill="#222"/>
-        <circle cx="42" cy="44" r="5" fill="#222"/>
-      </svg>`;
-    const m=new mapboxgl.Marker({element:el})
-      .setLngLat(c)
-      .addTo(map);
-    stationMarkers.push(m);
+      /* STOP MARKERS (SKIP SOURCE) */
+      bus.subRoute.coordinates.slice(1).forEach(c=>{
+        const el=document.createElement("div");
+        el.className="stop-marker";
+        el.innerHTML=`
+          <svg viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="30" fill="#ffd500"/>
+            <rect x="12" y="20" rx="6" ry="6" width="40" height="22" fill="#ff6b35"/>
+            <rect x="16" y="24" width="32" height="10" fill="#222"/>
+            <circle cx="22" cy="44" r="5" fill="#222"/>
+            <circle cx="42" cy="44" r="5" fill="#222"/>
+          </svg>`;
+        const m=new mapboxgl.Marker({element:el})
+          .setLngLat(c)
+          .addTo(map);
+        stationMarkers.push(m);
+      });
+
+      /* BUS MARKER */
+      const el=document.createElement("div");
+      el.className="bus-marker";
+      el.innerHTML=`
+        <svg viewBox="0 0 64 64">
+          <defs>
+            <linearGradient id="g-${idx}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff9f1c"/>
+              <stop offset="100%" stop-color="#ff6b35"/>
+            </linearGradient>
+          </defs>
+          <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g-${idx})"/>
+          <rect x="10" y="12" width="44" height="12" fill="#222"/>
+          <circle cx="18" cy="48" r="6" fill="#111"/>
+          <circle cx="46" cy="48" r="6" fill="#111"/>
+        </svg>`;
+
+      const popup=document.createElement("div");
+      popup.className="route-popup";
+
+      const speedCircle=document.createElement("div");
+      speedCircle.className="speed-circle";
+      speedCircle.textContent="0 km/h";
+      speedCircles.push(speedCircle);
+
+      const list=document.createElement("div");
+      list.className="route-list";
+      bus.fullRoute.stops.forEach(s=>{
+        list.innerHTML+=`<div class="route-dot"></div><div>${s}</div>`;
+      });
+
+      popup.append(speedCircle,list);
+      el.appendChild(popup);
+
+      el.onclick=e=>{e.stopPropagation();popup.style.display="block"};
+      document.body.onclick=()=>popup.style.display="none";
+
+      const marker=new mapboxgl.Marker({element:el})
+        .setLngLat(geojson.coordinates[0])
+        .addTo(map);
+
+      liveMarkers.push(marker);
+
+      if(idx===0){
+        map.fitBounds(geojson.coordinates,{padding:80});
+      }
+    });
   });
-
-  const el=document.createElement("div");
-  el.className="bus-marker";
-  el.innerHTML=`
-    <svg viewBox="0 0 64 64">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#ff9f1c"/>
-          <stop offset="100%" stop-color="#ff6b35"/>
-        </linearGradient>
-      </defs>
-      <rect x="6" y="8" rx="6" ry="6" width="52" height="36" fill="url(#g)"/>
-      <rect x="10" y="12" width="44" height="12" fill="#222"/>
-      <circle cx="18" cy="48" r="6" fill="#111"/>
-      <circle cx="46" cy="48" r="6" fill="#111"/>
-    </svg>`;
-
-  const popup=document.createElement("div");
-  popup.className="route-popup";
-
-  speedCircle=document.createElement("div");
-  speedCircle.className="speed-circle";
-  speedCircle.textContent="0 km/h";
-
-  const list=document.createElement("div");
-  list.className="route-list";
-  bus.fullRoute.stops.forEach(s=>{
-    list.innerHTML+=`<div class="route-dot"></div><div>${s}</div>`;
-  });
-
-  popup.append(speedCircle,list);
-  el.appendChild(popup);
-
-  el.onclick=e=>{e.stopPropagation();popup.style.display="block"};
-  document.body.onclick=()=>popup.style.display="none";
-
-  liveMarker=new mapboxgl.Marker({element:el})
-    .setLngLat(geojson.coordinates[0])
-    .addTo(map);
-
-  map.fitBounds(geojson.coordinates,{padding:80});
 };
 
 /* LIVE UPDATE */
 setInterval(async ()=>{
-  if(!liveMarker) return;
+  if(!liveMarkers.length) return;
   const r=await fetch("/livebuses",{ credentials:"include" });
-  const b=(await r.json())[0];
-  if(!b) return;
+  const buses=(await r.json());
 
-  liveMarker.setLngLat([b.lng,b.lat]);
+  buses.forEach((b, i)=>{
+    if(!liveMarkers[i]) return;
+    liveMarkers[i].setLngLat([b.lng,b.lat]);
 
-  if(b.lastlat!=null){
-    const d=Math.sqrt((b.lat-b.lastlat)**2+(b.lng-b.lastlng)**2);
-    speedCircle.textContent=Math.round(d*360)+" km/h";
-  }
+    if(b.lastlat!=null){
+      const d=Math.sqrt((b.lat-b.lastlat)**2+(b.lng-b.lastlng)**2);
+      speedCircles[i].textContent=Math.round(d*360)+" km/h";
+    }
+  });
 },10000);
 </script>
 
