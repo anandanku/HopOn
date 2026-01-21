@@ -312,14 +312,14 @@ getBuses.onclick = async ()=>{
   map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
   map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
 
-  /* STOP MARKERS — ORANGE CIRCLE BUS, SKIP SOURCE */
+  /* STOP MARKERS — YELLOW CIRCLE, ORANGE BUS, SKIP SOURCE */
   bus.subRoute.coordinates.slice(1).forEach(c=>{
     const el=document.createElement("div");
     el.className="stop-marker";
     el.innerHTML=`
       <svg viewBox="0 0 64 64">
-        <circle cx="32" cy="32" r="30" fill="#ff6b35"/>
-        <rect x="12" y="20" rx="6" ry="6" width="40" height="22" fill="#fff"/>
+        <circle cx="32" cy="32" r="30" fill="#ffd500"/>
+        <rect x="12" y="20" rx="6" ry="6" width="40" height="22" fill="#ff6b35"/>
         <rect x="16" y="24" width="32" height="10" fill="#222"/>
         <circle cx="22" cy="44" r="5" fill="#222"/>
         <circle cx="42" cy="44" r="5" fill="#222"/>
