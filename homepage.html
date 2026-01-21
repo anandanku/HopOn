@@ -123,13 +123,30 @@ input:checked + .slider:before{transform:translateX(24px)}
   cursor:pointer;
 }
 
-/* STATION MARKER */
-.station-marker{
-  width:14px;
-  height:14px;
-  background:#00e5ff;
-  border:2px solid white;
+/* 3D STOP MARKER */
+.stop-marker{
+  width:18px;
+  height:18px;
+  background:linear-gradient(145deg,#ffffff,#ff6b35);
   border-radius:50%;
+  border:2px solid #ff6b35;
+  box-shadow:
+    0 4px 6px rgba(0,0,0,.35),
+    inset 0 2px 3px rgba(255,255,255,.6),
+    inset 0 -2px 3px rgba(0,0,0,.3);
+  position:relative;
+}
+.stop-marker:after{
+  content:"";
+  position:absolute;
+  bottom:-10px;
+  left:50%;
+  transform:translateX(-50%);
+  width:6px;
+  height:10px;
+  background:#ff6b35;
+  border-radius:0 0 6px 6px;
+  box-shadow:0 3px 4px rgba(0,0,0,.4);
 }
 
 /* POPUP */
@@ -276,19 +293,16 @@ bind(dst,dstSug,dest);
 getBuses.onclick = async ()=>{
   if(!source.lat||!dest.lat) return alert("Select from suggestions");
 
-  /* REMOVE OLD ROUTE */
   if(map.getSource("route")){
     map.removeLayer("route");
     map.removeSource("route");
   }
 
-  /* REMOVE OLD BUS MARKER */
   if(liveMarker){
     liveMarker.remove();
     liveMarker=null;
   }
 
-  /* REMOVE OLD STATION MARKERS */
   stationMarkers.forEach(m=>m.remove());
   stationMarkers=[];
 
@@ -316,10 +330,10 @@ getBuses.onclick = async ()=>{
   map.addSource("route",{type:"geojson",data:{type:"Feature",geometry:geojson}});
   map.addLayer({id:"route",type:"line",source:"route",paint:{"line-width":6,"line-color":"#ff6b35"}});
 
-  /* STATION MARKERS */
+  /* STOP MARKERS */
   bus.subRoute.coordinates.forEach(c=>{
     const el=document.createElement("div");
-    el.className="station-marker";
+    el.className="stop-marker";
     const m=new mapboxgl.Marker({element:el}).setLngLat(c).addTo(map);
     stationMarkers.push(m);
   });
